@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ titulo }}{% endblock %}
+{% block content %}
+  <h2>Bienvenido a Flask + Jinja2</h2>
+  <p>Esta es la página de inicio usando herencia de plantillas.</p>
+
+  <ul>
+    {% for item in ["HTML", "CSS", "Flask", "Jinja2"] %}
+      <li>{{ item }}</li>
+    {% endfor %}
+  </ul>
+{% endblock %}
