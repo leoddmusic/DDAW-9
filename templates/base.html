@@ -1,26 +1,62 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}{{ titulo or "Flask App" }}{% endblock %}</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>{% block title %}{{ titulo or "Inventario" }}{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <script>
+    // Tema inicial (antes de pintar)
+    (function(){
+      const t = localStorage.getItem('theme') || 'light';
+      document.documentElement.dataset.theme = t;
+    })();
+  </script>
 </head>
 <body>
-  <header>
-    <h1>Mi Flask</h1>
-    <nav>
-      <a href="{{ url_for('index') }}">Inicio</a>
-      <a href="{{ url_for('about') }}">Acerca de</a>
+  <header class="navbar">
+    <div class="brand">
+      <a class="brand__title" href="{{ url_for('home') }}">Inventario</a>
+      <span class="chip">Flask</span>
+    </div>
+    <nav class="navlinks">
+      <a href="{{ url_for('home') }}">Inicio</a>
+      <a href="{{ url_for('nuevo') }}">Nuevo producto</a>
+      <a href="{{ url_for('home') }}#ayuda">Ayuda</a>
+      <button id="themeToggle" class="btn btn-ghost" title="Cambiar tema">🌙</button>
     </nav>
   </header>
 
-  <main>
+  <main class="container">
+    {% with msgs = get_flashed_messages(with_categories=true) %}
+      {% if msgs %}
+        <ul class="flash">
+          {% for cat, msg in msgs %}
+            <li class="flash__item flash--{{ cat }}">{{ msg }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+
     {% block content %}{% endblock %}
   </main>
 
-  <footer>
-    <p>© {{ 2025 }}</p>
+  <footer class="footer">
+    <small>POO + Flask-WTF + SQLite • Semana 11</small>
   </footer>
+
+  <script>
+    // Toggle de tema claro/oscuro
+    const btn = document.getElementById('themeToggle');
+    function apply(theme){
+      document.documentElement.dataset.theme = theme;
+      localStorage.setItem('theme', theme);
+      btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+    }
+    apply(document.documentElement.dataset.theme || 'light');
+    btn.addEventListener('click', ()=>{
+      apply((localStorage.getItem('theme') === 'dark') ? 'light' : 'dark');
+    });
+  </script>
 </body>
 </html>

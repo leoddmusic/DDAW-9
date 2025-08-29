@@ -1,12 +1,68 @@
 {% extends "base.html" %}
-{% block title %}{{ titulo }}{% endblock %}
+{% block title %}{{ titulo or "Inventario" }}{% endblock %}
 {% block content %}
-  <h2>Bienvenido a Flask + Jinja2</h2>
-  <p>Esta es la página de inicio usando herencia de plantillas.</p>
 
-  <ul>
-    {% for item in ["HTML", "CSS", "Flask", "Jinja2"] %}
-      <li>{{ item }}</li>
-    {% endfor %}
+<section class="card">
+  <div class="card__header">
+    <h2>Inventario</h2>
+    <form action="{{ url_for('buscar') }}" method="get" class="searchbar">
+      <input class="input" type="text" name="q" value="{{ q or '' }}" placeholder="Buscar por nombre…">
+      <button class="btn btn-primary" type="submit">Buscar</button>
+    </form>
+  </div>
+
+  {% if productos and productos|length > 0 %}
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>ID</th><th>Nombre</th><th>Cantidad</th><th>Precio</th><th>Subtotal</th><th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in productos %}
+        <tr>
+          <td>{{ p.id }}</td>
+          <td class="text-strong">{{ p.nombre }}</td>
+          <td>{{ p.cantidad }}</td>
+          <td>${{ "%.2f"|format(p.precio) }}</td>
+          <td>${{ "%.2f"|format(p.cantidad * p.precio) }}</td>
+          <td class="actions">
+            <a class="btn btn-small" href="{{ url_for('editar', pid=p.id) }}">✏️ Editar</a>
+            <form action="{{ url_for('eliminar', pid=p.id) }}" method="post">
+              {{ delete_form.hidden_tag() }}
+              <button class="btn btn-small btn-danger" type="submit">🗑️ Eliminar</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <th colspan="2">Totales</th>
+          <th>{{ total_items }}</th>
+          <th></th>
+          <th>${{ "%.2f"|format(total_valor) }}</th>
+          <th></th>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  {% else %}
+    <div class="empty">
+      <p>Tu inventario está vacío.</p>
+      <a class="btn btn-primary" href="{{ url_for('nuevo') }}">Agregar primer producto</a>
+    </div>
+  {% endif %}
+</section>
+
+<section id="ayuda" class="card">
+  <h3>Qué incluye</h3>
+  <ul class="bullets">
+    <li>Validación con Flask-WTF (+ CSRF).</li>
+    <li>CRUD completo con SQLite.</li>
+    <li>Buscador, totales y UI con tema claro/oscuro.</li>
   </ul>
+</section>
+
 {% endblock %}

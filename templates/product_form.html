@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ titulo or "Producto" }}{% endblock %}
+{% block content %}
+<section class="card card--form">
+  <h2>{{ titulo or "Producto" }}</h2>
+  <form method="post" class="form">
+    {{ form.hidden_tag() }}
+
+    <div class="field">
+      <label>Nombre</label>
+      {{ form.nombre(class_="input") }}
+      {% for e in form.nombre.errors %}<p class="error">{{ e }}</p>{% endfor %}
+    </div>
+
+    <div class="field">
+      <label>Cantidad</label>
+      {{ form.cantidad(class_="input") }}
+      {% for e in form.cantidad.errors %}<p class="error">{{ e }}</p>{% endfor %}
+    </div>
+
+    <div class="field">
+      <label>Precio</label>
+      {{ form.precio(class_="input") }}
+      {% for e in form.precio.errors %}<p class="error">{{ e }}</p>{% endfor %}
+    </div>
+
+    <div class="actions">
+      {{ form.enviar(class_="btn btn-primary") }}
+      <a class="btn btn-ghost" href="{{ url_for('home') }}">Cancelar</a>
+    </div>
+  </form>
+</section>
+{% endblock %}
