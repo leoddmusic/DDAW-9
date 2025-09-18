@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>{{ titulo }}</h2>
+  <p>Sesión activa como <strong>{{ current_user.nombre }}</strong> ({{ current_user.email }}).</p>
+  <p>Desde aquí puedes acceder al inventario y a las rutas protegidas.</p>
+{% endblock %}

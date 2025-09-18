@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ titulo }}</h2>
+<form method="POST" class="card" style="max-width:420px">
+  {{ form.hidden_tag() }}
+  <div class="field">{{ form.nombre.label }}<br>{{ form.nombre(size=40) }}</div>
+  <div class="field">{{ form.email.label }}<br>{{ form.email(size=40) }}</div>
+  <div class="field">{{ form.password.label }}<br>{{ form.password(size=40) }}</div>
+  <div class="actions">
+    {{ form.enviar(class_="btn") }}
+    <a class="btn secondary" href="{{ url_for('auth_login') }}">Ya tengo cuenta</a>
+  </div>
+</form>
+{% endblock %}

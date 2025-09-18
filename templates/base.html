@@ -1,62 +1,41 @@
 <!doctype html>
 <html lang="es">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>{% block title %}{{ titulo or "Inventario" }}{% endblock %}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-  <script>
-    // Tema inicial (antes de pintar)
-    (function(){
-      const t = localStorage.getItem('theme') || 'light';
-      document.documentElement.dataset.theme = t;
-    })();
-  </script>
-</head>
-<body>
-  <header class="navbar">
-    <div class="brand">
-      <a class="brand__title" href="{{ url_for('home') }}">Inventario</a>
-      <span class="chip">Flask</span>
-    </div>
-    <nav class="navlinks">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ titulo or "App" }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
+  <body>
+    <nav class="topbar" style="display:flex;gap:12px;align-items:center">
       <a href="{{ url_for('home') }}">Inicio</a>
       <a href="{{ url_for('nuevo') }}">Nuevo producto</a>
-      <a href="{{ url_for('home') }}#ayuda">Ayuda</a>
-      <button id="themeToggle" class="btn btn-ghost" title="Cambiar tema">🌙</button>
-    </nav>
-  </header>
+      <a href="{{ url_for('mysql_usuarios') }}">Usuarios (MySQL)</a>
 
-  <main class="container">
-    {% with msgs = get_flashed_messages(with_categories=true) %}
-      {% if msgs %}
-        <ul class="flash">
-          {% for cat, msg in msgs %}
-            <li class="flash__item flash--{{ cat }}">{{ msg }}</li>
+      <span style="flex:1"></span>
+
+      {% if current_user.is_authenticated %}
+        <span>Hola, <strong>{{ current_user.nombre }}</strong></span>
+        <a href="{{ url_for('panel') }}">Panel</a>
+        <a href="{{ url_for('auth_logout') }}">Cerrar sesión</a>
+      {% else %}
+        <a href="{{ url_for('auth_login') }}">Iniciar sesión</a>
+        <a href="{{ url_for('auth_register') }}">Crear cuenta</a>
+      {% endif %}
+    </nav>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flashes">
+          {% for cat, msg in messages %}
+            <div class="flash {{ cat }}">{{ msg }}</div>
           {% endfor %}
-        </ul>
+        </div>
       {% endif %}
     {% endwith %}
 
-    {% block content %}{% endblock %}
-  </main>
-
-  <footer class="footer">
-    <small>POO + Flask-WTF + SQLite • Semana 11</small>
-  </footer>
-
-  <script>
-    // Toggle de tema claro/oscuro
-    const btn = document.getElementById('themeToggle');
-    function apply(theme){
-      document.documentElement.dataset.theme = theme;
-      localStorage.setItem('theme', theme);
-      btn.textContent = theme === 'dark' ? '☀️' : '🌙';
-    }
-    apply(document.documentElement.dataset.theme || 'light');
-    btn.addEventListener('click', ()=>{
-      apply((localStorage.getItem('theme') === 'dark') ? 'light' : 'dark');
-    });
-  </script>
-</body>
+    <main class="container">
+      {% block content %}{% endblock %}
+    </main>
+  </body>
 </html>

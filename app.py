@@ -1,6 +1,7 @@
 # ==============================================================
 # app.py — Inventario Flask (CRUD + búsqueda) + Persistencia TXT/JSON/CSV
 #          + SQLAlchemy (usuarios.db) + MySQL (usuarios en XAMPP)
+#          + Autenticación con Flask-Login (MySQL)
 # ==============================================================
 
 from flask import Flask, render_template, request, redirect, url_for, flash
@@ -11,8 +12,32 @@ from datetime import datetime
 # Conexión MySQL
 from Conexion import get_db_connection
 
+# Login
+from flask_login import (
+    LoginManager, login_user, login_required, logout_user, current_user
+)
+from werkzeug.security import check_password_hash
+
+# Capa de usuarios MySQL
+from models import User, get_user_by_id, get_user_by_email, create_user
+
+# Formularios
+from flask_wtf import FlaskForm
+from wtforms import StringField, IntegerField, DecimalField, SubmitField, PasswordField
+from wtforms.validators import DataRequired, Length, NumberRange, Email
+
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "cambia_esta_clave_super_secreta"
+
+# ---------------------- LoginManager ---------------------------
+login_manager = LoginManager(app)
+login_manager.login_view = "auth_login"              # endpoint de la vista de login
+login_manager.login_message_category = "warning"
+
+@login_manager.user_loader
+def load_user(user_id: str):
+    # Recibe id como string -> devuelve User o None
+    return get_user_by_id(int(user_id))
 
 # ---------------------- SQLITE (productos) ----------------------
 DB_PATH = "inventario.db"
@@ -49,6 +74,7 @@ def _as_float(v, default=1.0):
 TXT_PATH = DATOS_DIR / "datos.txt"
 
 @app.route("/txt/guardar")
+@login_required
 def guardar_txt():
     nombre   = (request.args.get("nombre") or "Producto TXT").strip()
     cantidad = _as_int(request.args.get("cantidad"), 1)
@@ -60,6 +86,7 @@ def guardar_txt():
     return f"OK TXT → {linea}"
 
 @app.route("/txt/ver")
+@login_required
 def ver_txt():
     contenido = TXT_PATH.read_text(encoding="utf-8") if TXT_PATH.exists() else "(archivo vacío)"
     return f"<pre>{contenido}</pre>"
@@ -76,6 +103,7 @@ def _json_save(data):
     JSON_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 @app.route("/json/guardar")
+@login_required
 def guardar_json():
     nombre   = (request.args.get("nombre") or "Producto JSON").strip()
     cantidad = _as_int(request.args.get("cantidad"), 1)
@@ -87,6 +115,7 @@ def guardar_json():
     return {"ok": True, "total_registros": len(data)}
 
 @app.route("/json/ver")
+@login_required
 def ver_json():
     data = _json_load()
     return f"<pre>{json.dumps(data, ensure_ascii=False, indent=2)}</pre>"
@@ -94,6 +123,7 @@ def ver_json():
 CSV_PATH = DATOS_DIR / "datos.csv"
 
 @app.route("/csv/guardar")
+@login_required
 def guardar_csv():
     nombre   = (request.args.get("nombre") or "Producto CSV").strip()
     cantidad = _as_int(request.args.get("cantidad"), 1)
@@ -108,6 +138,7 @@ def guardar_csv():
     return {"ok": True}
 
 @app.route("/csv/ver")
+@login_required
 def ver_csv():
     if not CSV_PATH.exists() or CSV_PATH.stat().st_size == 0:
         return "<pre>(archivo vacío)</pre>"
@@ -134,6 +165,7 @@ def _upsert_producto(nombre: str, cantidad: int, precio: float):
     return True
 
 @app.route("/import/txt")
+@login_required
 def import_txt():
     if not TXT_PATH.exists():
         return {"ok": False, "msg": "datos.txt no existe"}
@@ -146,6 +178,7 @@ def import_txt():
     return {"ok": True, "origen": "txt", "procesados": procesados}
 
 @app.route("/import/json")
+@login_required
 def import_json():
     if not JSON_PATH.exists():
         return {"ok": False, "msg": "datos.json no existe"}
@@ -161,6 +194,7 @@ def import_json():
     return {"ok": True, "origen": "json", "procesados": procesados}
 
 @app.route("/import/csv")
+@login_required
 def import_csv():
     if not CSV_PATH.exists() or CSV_PATH.stat().st_size == 0:
         return {"ok": False, "msg": "datos.csv vacío o no existe"}
@@ -174,6 +208,7 @@ def import_csv():
     return {"ok": True, "origen": "csv", "procesados": procesados}
 
 @app.route("/import/all")
+@login_required
 def import_all():
     res_txt  = import_txt()
     res_json = import_json()
@@ -186,10 +221,6 @@ def import_all():
     return redirect(url_for("home"))
 
 # ---------------------- Formularios (Flask-WTF) -----------------
-from flask_wtf import FlaskForm
-from wtforms import StringField, IntegerField, DecimalField, SubmitField
-from wtforms.validators import DataRequired, Length, NumberRange, Email
-
 class ProductoForm(FlaskForm):
     nombre   = StringField("Nombre", validators=[DataRequired(), Length(min=2, max=50)])
     cantidad = IntegerField("Cantidad", validators=[DataRequired(), NumberRange(min=0)])
@@ -204,8 +235,20 @@ class UsuarioMySQLForm(FlaskForm):
     email  = StringField("Email",  validators=[DataRequired(), Email(), Length(max=120)])
     enviar = SubmitField("Agregar")
 
+class RegisterForm(FlaskForm):
+    nombre = StringField("Nombre", validators=[DataRequired(), Length(min=2, max=100)])
+    email  = StringField("Email", validators=[DataRequired(), Email(), Length(max=120)])
+    password = PasswordField("Contraseña", validators=[DataRequired(), Length(min=6, max=128)])
+    enviar = SubmitField("Crear cuenta")
+
+class LoginForm(FlaskForm):
+    email  = StringField("Email", validators=[DataRequired(), Email(), Length(max=120)])
+    password = PasswordField("Contraseña", validators=[DataRequired(), Length(min=6, max=128)])
+    enviar = SubmitField("Iniciar sesión")
+
 # ---------------------- Rutas productos (SQLite) ----------------
 @app.route("/")
+@login_required
 def home():
     with get_conn() as conn:
         filas = conn.execute("SELECT id,nombre,cantidad,precio FROM productos ORDER BY id").fetchall()
@@ -217,6 +260,7 @@ def home():
                            titulo="Inventario")
 
 @app.route("/nuevo/", methods=["GET","POST"])
+@login_required
 def nuevo():
     form = ProductoForm()
     if form.validate_on_submit():
@@ -231,6 +275,7 @@ def nuevo():
     return render_template("product_form.html", form=form, titulo="Nuevo producto")
 
 @app.route("/editar/<int:pid>/", methods=["GET","POST"])
+@login_required
 def editar(pid: int):
     with get_conn() as conn:
         row = conn.execute("SELECT * FROM productos WHERE id=?", (pid,)).fetchone()
@@ -253,6 +298,7 @@ def editar(pid: int):
     return render_template("product_form.html", form=form, titulo=f"Editar (ID {pid})")
 
 @app.route("/eliminar/<int:pid>/", methods=["POST"])
+@login_required
 def eliminar(pid: int):
     form = DeleteForm()
     if form.validate_on_submit():
@@ -265,6 +311,7 @@ def eliminar(pid: int):
     return redirect(url_for("home"))
 
 @app.route("/buscar")
+@login_required
 def buscar():
     q = (request.args.get("q") or "").strip().lower()
     with get_conn() as conn:
@@ -295,6 +342,7 @@ Base.metadata.create_all(ENGINE)
 Session = sessionmaker(bind=ENGINE, expire_on_commit=False)
 
 @app.route("/usuarios/crear")
+@login_required
 def usuarios_crear():
     nombre = (request.args.get("nombre") or "Usuario Demo").strip()
     email  = (request.args.get("email") or "demo@mail.com").strip()
@@ -304,6 +352,7 @@ def usuarios_crear():
     return {"ok": True, "mensaje": f"Usuario '{nombre}' creado"}
 
 @app.route("/usuarios/listar")
+@login_required
 def usuarios_listar():
     with Session() as s:
         users = s.query(Usuario).order_by(Usuario.id).all()
@@ -337,15 +386,16 @@ def mysql_execute(sql, params=()):
     cur.close(); conn.close()
 
 @app.route("/mysql/usuarios", methods=["GET", "POST"])
+@login_required
 def mysql_usuarios():
     form = UsuarioMySQLForm()
     if form.validate_on_submit():
         try:
             mysql_execute(
-                "INSERT INTO usuarios (nombre, email) VALUES (%s, %s)",
-                (form.nombre.data.strip(), form.email.data.strip())
+                "INSERT INTO usuarios (nombre, email, password_hash) VALUES (%s, %s, %s)",
+                (form.nombre.data.strip(), form.email.data.strip(), "PLACEHOLDER")  # panel admin básico
             )
-            flash("Usuario creado en MySQL.", "success")
+            flash("Usuario creado en MySQL (sin contraseña real).", "success")
             return redirect(url_for("mysql_usuarios"))
         except Exception as e:
             flash(f"Error al crear usuario: {e}", "danger")
@@ -354,6 +404,7 @@ def mysql_usuarios():
     return render_template("mysql_usuarios.html", usuarios=usuarios, form=form, titulo="Usuarios (MySQL)")
 
 @app.route("/mysql/usuarios/eliminar/<int:uid>", methods=["POST"])
+@login_required
 def mysql_usuarios_eliminar(uid: int):
     try:
         mysql_execute("DELETE FROM usuarios WHERE id = %s", (uid,))
@@ -361,6 +412,51 @@ def mysql_usuarios_eliminar(uid: int):
     except Exception as e:
         flash(f"Error eliminando usuario: {e}", "danger")
     return redirect(url_for("mysql_usuarios"))
+
+# ---------------------- AUTH (Flask-Login + MySQL) --------------
+@app.route("/auth/register", methods=["GET", "POST"])
+def auth_register():
+    if current_user.is_authenticated:
+        return redirect(url_for("panel"))
+    form = RegisterForm()
+    if form.validate_on_submit():
+        if get_user_by_email(form.email.data.strip()):
+            flash("Ese email ya está registrado.", "warning")
+        else:
+            create_user(form.nombre.data.strip(), form.email.data.strip(), form.password.data)
+            flash("Cuenta creada. Ahora inicia sesión.", "success")
+            return redirect(url_for("auth_login"))
+    return render_template("auth_register.html", form=form, titulo="Crear cuenta")
+
+@app.route("/auth/login", methods=["GET", "POST"])
+def auth_login():
+    if current_user.is_authenticated:
+        return redirect(url_for("panel"))
+    form = LoginForm()
+    if form.validate_on_submit():
+        row = get_user_by_email(form.email.data.strip())
+        if not row or not row.get("password_hash") or not check_password_hash(row["password_hash"], form.password.data):
+            flash("Credenciales inválidas.", "danger")
+        else:
+            user = User(row["id"], row["nombre"], row["email"])
+            login_user(user, remember=True)
+            flash(f"Bienvenido, {user.nombre}.", "success")
+            next_url = request.args.get("next") or url_for("panel")
+            return redirect(next_url)
+    return render_template("auth_login.html", form=form, titulo="Iniciar sesión")
+
+@app.route("/auth/logout")
+@login_required
+def auth_logout():
+    nombre = current_user.nombre
+    logout_user()
+    flash(f"Hasta luego, {nombre}.", "info")
+    return redirect(url_for("auth_login"))
+
+@app.route("/panel")
+@login_required
+def panel():
+    return render_template("panel.html", titulo="Panel")
 
 # ---------------------- Punto de entrada ------------------------
 if __name__ == "__main__":
