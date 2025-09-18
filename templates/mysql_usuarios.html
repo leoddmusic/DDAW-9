@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>{{ titulo }}</h2>
+
+<form method="POST" class="card" style="max-width:520px">
+  {{ form.hidden_tag() }}
+  <div class="field">
+    {{ form.nombre.label }}<br>
+    {{ form.nombre(size=40) }}
+    {% for e in form.nombre.errors %}<div class="err">{{ e }}</div>{% endfor %}
+  </div>
+  <div class="field">
+    {{ form.email.label }}<br>
+    {{ form.email(size=40) }}
+    {% for e in form.email.errors %}<div class="err">{{ e }}</div>{% endfor %}
+  </div>
+  <div class="actions">
+    {{ form.enviar(class_="btn") }}
+    <a class="btn secondary" href="{{ url_for('home') }}">Volver al Inventario</a>
+  </div>
+</form>
+
+<hr>
+
+<table class="table">
+  <thead>
+    <tr><th>ID</th><th>Nombre</th><th>Email</th><th>Acciones</th></tr>
+  </thead>
+  <tbody>
+    {% if usuarios %}
+      {% for u in usuarios %}
+        <tr>
+          <td>{{ u.id }}</td>
+          <td>{{ u.nombre }}</td>
+          <td>{{ u.email }}</td>
+          <td>
+            <form method="POST" action="{{ url_for('mysql_usuarios_eliminar', uid=u.id) }}" onsubmit="return confirm('¿Eliminar {{u.nombre}}?')">
+              <button class="btn danger">Eliminar</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    {% else %}
+      <tr><td colspan="4" style="text-align:center;">Sin registros</td></tr>
+    {% endif %}
+  </tbody>
+</table>
+{% endblock %}

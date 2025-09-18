@@ -1,29 +1,28 @@
 # ==============================================================
 # app.py — Inventario Flask (CRUD + búsqueda) + Persistencia TXT/JSON/CSV
-#          + SQLAlchemy (usuarios.db)
+#          + SQLAlchemy (usuarios.db) + MySQL (usuarios en XAMPP)
 # ==============================================================
 
-# 1) IMPORTS BÁSICOS ---------------------------------------------------------
 from flask import Flask, render_template, request, redirect, url_for, flash
 import sqlite3, json, csv
 from pathlib import Path
 from datetime import datetime
 
-# 2) CONFIGURACIÓN DE FLASK --------------------------------------------------
-app = Flask(__name__)
-app.config["SECRET_KEY"] = "cambia_esta_clave_super_secreta"  # CSRF para formularios
+# Conexión MySQL
+from Conexion import get_db_connection
 
-# 3) BASES DE DATOS (sqlite3 para Productos) --------------------------------
-DB_PATH = "inventario.db"   # dejamos tu inventario donde ya lo tienes
+app = Flask(__name__)
+app.config["SECRET_KEY"] = "cambia_esta_clave_super_secreta"
+
+# ---------------------- SQLITE (productos) ----------------------
+DB_PATH = "inventario.db"
 
 def get_conn():
-    """Devuelve una conexión SQLite con filas tipo dict (Row)."""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
 def init_db():
-    """Crea la tabla productos si no existe."""
     with get_conn() as conn:
         conn.execute("""
         CREATE TABLE IF NOT EXISTS productos(
@@ -34,12 +33,11 @@ def init_db():
         )""")
         conn.commit()
 
-# 4) PERSISTENCIA CON ARCHIVOS ----------------------------------------------
+# ---------------------- Archivos de datos -----------------------
 BASE_DIR = Path(__file__).parent
 DATOS_DIR = BASE_DIR / "datos"
 DATOS_DIR.mkdir(exist_ok=True)
 
-# 4.1) Helpers genéricos para parseo seguro
 def _as_int(v, default=1):
     try: return int(v)
     except (TypeError, ValueError): return default
@@ -48,15 +46,10 @@ def _as_float(v, default=1.0):
     try: return float(str(v).replace(",", "."))
     except (TypeError, ValueError): return default
 
-# 4.2) TXT -------------------------------------------------------------------
 TXT_PATH = DATOS_DIR / "datos.txt"
 
 @app.route("/txt/guardar")
 def guardar_txt():
-    """
-    Guarda una línea en datos.txt:
-      /txt/guardar?nombre=Pan&cantidad=3&precio=2.5
-    """
     nombre   = (request.args.get("nombre") or "Producto TXT").strip()
     cantidad = _as_int(request.args.get("cantidad"), 1)
     precio   = _as_float(request.args.get("precio"), 1.0)
@@ -71,7 +64,6 @@ def ver_txt():
     contenido = TXT_PATH.read_text(encoding="utf-8") if TXT_PATH.exists() else "(archivo vacío)"
     return f"<pre>{contenido}</pre>"
 
-# 4.3) JSON ------------------------------------------------------------------
 JSON_PATH = DATOS_DIR / "datos.json"
 
 def _json_load():
@@ -85,10 +77,6 @@ def _json_save(data):
 
 @app.route("/json/guardar")
 def guardar_json():
-    """
-    Agrega un objeto al arreglo JSON:
-      /json/guardar?nombre=Leche&cantidad=2&precio=3.4
-    """
     nombre   = (request.args.get("nombre") or "Producto JSON").strip()
     cantidad = _as_int(request.args.get("cantidad"), 1)
     precio   = _as_float(request.args.get("precio"), 1.0)
@@ -103,15 +91,10 @@ def ver_json():
     data = _json_load()
     return f"<pre>{json.dumps(data, ensure_ascii=False, indent=2)}</pre>"
 
-# 4.4) CSV -------------------------------------------------------------------
 CSV_PATH = DATOS_DIR / "datos.csv"
 
 @app.route("/csv/guardar")
 def guardar_csv():
-    """
-    Agrega una fila al CSV (crea encabezado si no existe):
-      /csv/guardar?nombre=Azucar&cantidad=5&precio=4.2
-    """
     nombre   = (request.args.get("nombre") or "Producto CSV").strip()
     cantidad = _as_int(request.args.get("cantidad"), 1)
     precio   = _as_float(request.args.get("precio"), 1.0)
@@ -132,10 +115,80 @@ def ver_csv():
         rows = list(csv.DictReader(f))
     return f"<pre>{json.dumps(rows, ensure_ascii=False, indent=2)}</pre>"
 
-# 5) FORMULARIOS (Flask-WTF) -------------------------------------------------
+# Importadores a SQLite
+def _upsert_producto(nombre: str, cantidad: int, precio: float):
+    if not nombre: return False
+    with get_conn() as conn:
+        row = conn.execute("SELECT id FROM productos WHERE nombre=?", (nombre,)).fetchone()
+        if row:
+            conn.execute(
+                "UPDATE productos SET cantidad = cantidad + ?, precio = ? WHERE id = ?",
+                (max(0, cantidad), max(0.0, precio), row["id"])
+            )
+        else:
+            conn.execute(
+                "INSERT INTO productos(nombre, cantidad, precio) VALUES (?,?,?)",
+                (nombre, max(0, cantidad), max(0.0, precio))
+            )
+        conn.commit()
+    return True
+
+@app.route("/import/txt")
+def import_txt():
+    if not TXT_PATH.exists():
+        return {"ok": False, "msg": "datos.txt no existe"}
+    procesados = 0
+    for line in TXT_PATH.read_text(encoding="utf-8").splitlines():
+        parts = [p.strip() for p in line.split("|")]
+        if len(parts) != 4: continue
+        _, nombre, cant, prec = parts
+        procesados += 1 if _upsert_producto(nombre, _as_int(cant, 0), _as_float(prec, 0.0)) else 0
+    return {"ok": True, "origen": "txt", "procesados": procesados}
+
+@app.route("/import/json")
+def import_json():
+    if not JSON_PATH.exists():
+        return {"ok": False, "msg": "datos.json no existe"}
+    try:
+        data = json.loads(JSON_PATH.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {"ok": False, "msg": "JSON inválido"}
+    procesados = 0
+    for obj in data if isinstance(data, list) else []:
+        nombre = (obj.get("nombre") or "").strip()
+        procesados += 1 if _upsert_producto(nombre, _as_int(obj.get("cantidad"), 0),
+                                            _as_float(obj.get("precio"), 0.0)) else 0
+    return {"ok": True, "origen": "json", "procesados": procesados}
+
+@app.route("/import/csv")
+def import_csv():
+    if not CSV_PATH.exists() or CSV_PATH.stat().st_size == 0:
+        return {"ok": False, "msg": "datos.csv vacío o no existe"}
+    with open(CSV_PATH, newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    procesados = 0
+    for r in rows:
+        nombre = (r.get("nombre") or "").strip()
+        procesados += 1 if _upsert_producto(nombre, _as_int(r.get("cantidad"), 0),
+                                            _as_float(r.get("precio"), 0.0)) else 0
+    return {"ok": True, "origen": "csv", "procesados": procesados}
+
+@app.route("/import/all")
+def import_all():
+    res_txt  = import_txt()
+    res_json = import_json()
+    res_csv  = import_csv()
+    def _c(r): return r.get("procesados", 0) if isinstance(r, dict) else 0
+    c_txt, c_json, c_csv = _c(res_txt), _c(res_json), _c(res_csv)
+    total = c_txt + c_json + c_csv
+    try: flash(f"Importación: TXT={c_txt}, JSON={c_json}, CSV={c_csv} (Total={total})", "success")
+    except Exception: pass
+    return redirect(url_for("home"))
+
+# ---------------------- Formularios (Flask-WTF) -----------------
 from flask_wtf import FlaskForm
 from wtforms import StringField, IntegerField, DecimalField, SubmitField
-from wtforms.validators import DataRequired, Length, NumberRange
+from wtforms.validators import DataRequired, Length, NumberRange, Email
 
 class ProductoForm(FlaskForm):
     nombre   = StringField("Nombre", validators=[DataRequired(), Length(min=2, max=50)])
@@ -146,7 +199,12 @@ class ProductoForm(FlaskForm):
 class DeleteForm(FlaskForm):
     enviar = SubmitField("Eliminar")
 
-# 6) RUTAS (CRUD + BÚSQUEDA) -------------------------------------------------
+class UsuarioMySQLForm(FlaskForm):
+    nombre = StringField("Nombre", validators=[DataRequired(), Length(min=2, max=100)])
+    email  = StringField("Email",  validators=[DataRequired(), Email(), Length(max=120)])
+    enviar = SubmitField("Agregar")
+
+# ---------------------- Rutas productos (SQLite) ----------------
 @app.route("/")
 def home():
     with get_conn() as conn:
@@ -164,7 +222,9 @@ def nuevo():
     if form.validate_on_submit():
         with get_conn() as conn:
             conn.execute("INSERT INTO productos(nombre,cantidad,precio) VALUES (?,?,?)",
-                         (form.nombre.data.strip(), int(form.cantidad.data), float(form.precio.data)))
+                         (form.nombre.data.strip(),
+                          int(form.cantidad.data),
+                          float(form.precio.data)))
             conn.commit()
         flash("Producto creado.", "success")
         return redirect(url_for("home"))
@@ -177,14 +237,16 @@ def editar(pid: int):
     if row is None:
         flash("Producto no encontrado.", "warning")
         return redirect(url_for("home"))
-
     form = ProductoForm()
     if request.method == "GET":
         form.nombre.data = row["nombre"]; form.cantidad.data = row["cantidad"]; form.precio.data = row["precio"]
     if form.validate_on_submit():
         with get_conn() as conn:
             conn.execute("UPDATE productos SET nombre=?,cantidad=?,precio=? WHERE id=?",
-                         (form.nombre.data.strip(), int(form.cantidad.data), float(form.precio.data), pid))
+                         (form.nombre.data.strip(),
+                          int(form.cantidad.data),
+                          float(form.precio.data),
+                          pid))
             conn.commit()
         flash("Producto actualizado.", "success")
         return redirect(url_for("home"))
@@ -215,8 +277,7 @@ def buscar():
                            total_items=total_items, total_valor=total_valor,
                            q=q, titulo="Inventario")
 
-# 7) SQLALCHEMY (usuarios.db en /database) -----------------------------------
-#    Pequeña demo ORM: crear y listar usuarios
+# ---------------------- SQLAlchemy (demo usuarios.db) -----------
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.orm import declarative_base, sessionmaker
 
@@ -235,10 +296,6 @@ Session = sessionmaker(bind=ENGINE, expire_on_commit=False)
 
 @app.route("/usuarios/crear")
 def usuarios_crear():
-    """
-    Crea un usuario rápido con querystrings:
-      /usuarios/crear?nombre=Ariel&email=ariel@mail.com
-    """
     nombre = (request.args.get("nombre") or "Usuario Demo").strip()
     email  = (request.args.get("email") or "demo@mail.com").strip()
     with Session() as s:
@@ -248,13 +305,64 @@ def usuarios_crear():
 
 @app.route("/usuarios/listar")
 def usuarios_listar():
-    """Devuelve los usuarios almacenados con SQLAlchemy (usuarios.db)."""
     with Session() as s:
         users = s.query(Usuario).order_by(Usuario.id).all()
     data = [{"id": u.id, "nombre": u.nombre, "email": u.email} for u in users]
     return f"<pre>{json.dumps(data, ensure_ascii=False, indent=2)}</pre>"
 
-# 8) PUNTO DE ENTRADA --------------------------------------------------------
+# ---------------------- TEST MySQL ------------------------------
+@app.route("/test_db")
+def test_db():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SHOW TABLES")
+    tables = cur.fetchall()
+    cur.close(); conn.close()
+    return f"OK MySQL → {tables}"
+
+# ---------------------- CRUD mínimo MySQL (tabla usuarios) ------
+def mysql_fetch_all(sql, params=()):
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+    cur.execute(sql, params)
+    rows = cur.fetchall()
+    cur.close(); conn.close()
+    return rows
+
+def mysql_execute(sql, params=()):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(sql, params)
+    conn.commit()
+    cur.close(); conn.close()
+
+@app.route("/mysql/usuarios", methods=["GET", "POST"])
+def mysql_usuarios():
+    form = UsuarioMySQLForm()
+    if form.validate_on_submit():
+        try:
+            mysql_execute(
+                "INSERT INTO usuarios (nombre, email) VALUES (%s, %s)",
+                (form.nombre.data.strip(), form.email.data.strip())
+            )
+            flash("Usuario creado en MySQL.", "success")
+            return redirect(url_for("mysql_usuarios"))
+        except Exception as e:
+            flash(f"Error al crear usuario: {e}", "danger")
+
+    usuarios = mysql_fetch_all("SELECT id, nombre, email FROM usuarios ORDER BY id")
+    return render_template("mysql_usuarios.html", usuarios=usuarios, form=form, titulo="Usuarios (MySQL)")
+
+@app.route("/mysql/usuarios/eliminar/<int:uid>", methods=["POST"])
+def mysql_usuarios_eliminar(uid: int):
+    try:
+        mysql_execute("DELETE FROM usuarios WHERE id = %s", (uid,))
+        flash(f"Usuario {uid} eliminado.", "info")
+    except Exception as e:
+        flash(f"Error eliminando usuario: {e}", "danger")
+    return redirect(url_for("mysql_usuarios"))
+
+# ---------------------- Punto de entrada ------------------------
 if __name__ == "__main__":
     init_db()
     app.run(debug=True)

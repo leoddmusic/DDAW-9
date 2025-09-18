@@ -114,3 +114,12 @@ body{
 /* Empty state */
 .empty{display:grid; gap:8px; place-items:start}
 .empty p{color:var(--muted); margin:0}
+
+/* === Toolbar: buscador + importar === */
+@media (min-width: 640px){
+  .card__header form { display:inline-block; margin-right:.5rem; vertical-align:middle; }
+}
+.card__header .importbar .btn { padding: .5rem .9rem; }
+<form action="{{ url_for('import_all') }}" method="get" class="importbar">
+  <button class="btn" type="submit">Importar datos</button>
+</form>
