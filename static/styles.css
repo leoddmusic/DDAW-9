@@ -1,14 +1,14 @@
-/* ---------- Diseño moderno con tema claro/oscuro ---------- */
-:root {
-  --bg: #0b0e14;           /* dark default, lo cambiaremos según data-theme */
-  --surface: #111827;
-  --text: #e5e7eb;
-  --muted: #9ca3af;
-  --primary: #22c55e;
-  --primary-contrast: #0a0f0a;
-  --danger: #ef4444;
-  --border: #1f2937;
-  --shadow: 0 10px 24px rgba(0,0,0,.25);
+/* ---------- Tema claro/oscuro moderno ---------- */
+:root{
+  --bg:#0b0e14;
+  --surface:#111827;
+  --text:#e5e7eb;
+  --muted:#9ca3af;
+  --primary:#22c55e;
+  --primary-contrast:#0a0f0a;
+  --danger:#ef4444;
+  --border:#1f2937;
+  --shadow:0 10px 24px rgba(0,0,0,.25);
 }
 html[data-theme="light"]{
   --bg:#f6f7fb;
@@ -19,107 +19,108 @@ html[data-theme="light"]{
   --primary-contrast:#06202b;
   --danger:#e11d48;
   --border:#e5e7eb;
-  --shadow: 0 10px 24px rgba(2,6,23,.08);
+  --shadow:0 10px 24px rgba(2,6,23,.08);
 }
 
 *{box-sizing:border-box}
 body{
   margin:0;
-  font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
   background:var(--bg);
   color:var(--text);
 }
 
-/* Navbar */
-.navbar{
-  position:sticky; top:0;
-  display:flex; align-items:center; justify-content:space-between;
-  padding:12px 20px; background:linear-gradient(90deg, #0b7285, #155e75);
+/* ---------- Navbar (coincide con base.html: .topbar) ---------- */
+.topbar{
+  position:sticky; top:0; z-index:10;
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  padding:12px 20px;
+  background:linear-gradient(90deg,#0b7285,#155e75);
   box-shadow:var(--shadow);
 }
-.brand{display:flex; align-items:center; gap:10px;}
-.brand__title{color:#fff; text-decoration:none; font-weight:700; font-size:18px;}
-.chip{background:rgba(255,255,255,.2); color:#fff; padding:2px 8px; border-radius:999px; font-size:12px}
-.navlinks{display:flex; gap:14px; align-items:center}
-.navlinks a{color:#fff; text-decoration:none; opacity:.95}
-.navlinks a:hover{opacity:1; text-decoration:underline}
+.topbar a{color:#fff; text-decoration:none; opacity:.95}
+.topbar a:hover{opacity:1; text-decoration:underline}
 
-/* Layout */
+/* ---------- Layout ---------- */
 .container{max-width:1040px; margin:28px auto; padding:0 16px}
 .footer{max-width:1040px; margin:32px auto; padding:0 16px; color:var(--muted)}
 
-/* Cards */
+/* ---------- Cards ---------- */
 .card{
   background:var(--surface);
   border:1px solid var(--border);
   border-radius:16px;
-  padding:18px 18px;
+  padding:18px;
   box-shadow:var(--shadow);
   margin-bottom:18px;
 }
 .card__header{display:flex; align-items:center; justify-content:space-between; gap:12px}
 .card--form{max-width:560px;}
 
-/* Inputs y botones */
+/* ---------- Inputs y botones ---------- */
 .input{
   width:100%; padding:10px 12px; border-radius:10px;
   background:transparent; color:var(--text);
   border:1px solid var(--border); outline:none;
 }
-.input:focus{border-color:var(--primary); box-shadow:0 0 0 3px color-mix(in oklab, var(--primary), transparent 80%)}
+.input:focus{
+  border-color:var(--primary);
+  box-shadow:0 0 0 3px color-mix(in oklab,var(--primary),transparent 80%);
+}
 
 .btn{
   display:inline-flex; align-items:center; justify-content:center;
   padding:8px 12px; border-radius:10px; border:1px solid var(--border);
   color:var(--text); background:transparent; cursor:pointer; text-decoration:none;
-  transition: all .15s ease;
+  transition:all .15s ease;
 }
 .btn:hover{transform:translateY(-1px)}
 .btn:active{transform:translateY(0)}
-.btn-primary{background:var(--primary); color:white; border-color:transparent}
-.btn-primary:hover{box-shadow:0 6px 18px color-mix(in oklab, var(--primary), transparent 70%)}
-.btn-danger{background:var(--danger); color:white; border-color:transparent}
+.btn-primary{background:var(--primary); color:#fff; border-color:transparent}
+.btn-primary:hover{box-shadow:0 6px 18px color-mix(in oklab,var(--primary),transparent 70%)}
+.btn-danger{background:var(--danger); color:#fff; border-color:transparent}
 .btn-ghost{background:transparent; color:var(--text)}
 .btn-small{padding:6px 10px; font-size:14px}
 
-/* Tabla */
+/* ---------- Tabla ---------- */
 .table-wrapper{overflow:auto}
 .table{width:100%; border-collapse:collapse}
-.table th, .table td{padding:12px 10px; border-bottom:1px solid var(--border); vertical-align:middle}
-.table thead th{background: color-mix(in oklab, var(--primary), transparent 85%); color:var(--text); text-align:left}
-.table tbody tr:hover{background: color-mix(in oklab, var(--primary), transparent 92%)}
+.table th,.table td{
+  padding:12px 10px; border-bottom:1px solid var(--border); vertical-align:middle
+}
+.table thead th{
+  background:color-mix(in oklab,var(--primary),transparent 85%);
+  color:var(--text); text-align:left
+}
+.table tbody tr:hover{
+  background:color-mix(in oklab,var(--primary),transparent 92%)
+}
 .text-strong{font-weight:600}
 .actions{display:flex; gap:8px}
 .actions form{display:inline}
 
-/* Formulario */
+/* ---------- Formularios ---------- */
 .form{display:grid; gap:14px}
 .field label{display:block; margin-bottom:6px; color:var(--muted)}
 .error{color:var(--danger); margin:6px 0 0}
 
-/* Searchbar */
+/* ---------- Searchbar / toolbars ---------- */
 .searchbar{display:flex; gap:8px; align-items:center}
 .searchbar .input{max-width:260px}
+@media (min-width:640px){
+  .card__header form{display:inline-block; margin-right:.5rem; vertical-align:middle}
+}
 
-/* Flashes */
-.flash{list-style:none; padding:0; margin:0 0 16px 0; display:grid; gap:10px}
-.flash__item{
+/* ---------- Flashes (coincide con base.html: .flash {cat}) ---------- */
+.flashes{display:grid; gap:10px; margin:16px auto; max-width:1040px; padding:0 16px}
+.flash{
   border-radius:12px; padding:10px 12px; border:1px solid var(--border); background:var(--surface)
 }
-.flash--success{border-color: color-mix(in oklab, var(--primary), transparent 60%)}
-.flash--info{border-color:#60a5fa}
-.flash--warning{border-color:#f59e0b}
-.flash--danger{border-color:#ef4444}
+.flash.success{border-color:color-mix(in oklab,var(--primary),transparent 60%)}
+.flash.info{border-color:#60a5fa}
+.flash.warning{border-color:#f59e0b}
+.flash.danger{border-color:#ef4444}
 
-/* Empty state */
+/* ---------- Empty state ---------- */
 .empty{display:grid; gap:8px; place-items:start}
 .empty p{color:var(--muted); margin:0}
-
-/* === Toolbar: buscador + importar === */
-@media (min-width: 640px){
-  .card__header form { display:inline-block; margin-right:.5rem; vertical-align:middle; }
-}
-.card__header .importbar .btn { padding: .5rem .9rem; }
-<form action="{{ url_for('import_all') }}" method="get" class="importbar">
-  <button class="btn" type="submit">Importar datos</button>
-</form>

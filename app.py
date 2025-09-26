@@ -2,6 +2,7 @@
 # app.py — Inventario Flask (CRUD + búsqueda) + Persistencia TXT/JSON/CSV
 #          + SQLAlchemy (usuarios.db) + MySQL (usuarios en XAMPP)
 #          + Autenticación con Flask-Login (MySQL)
+#          + CRUD MySQL de productos (añadido)
 # ==============================================================
 
 from flask import Flask, render_template, request, redirect, url_for, flash
@@ -378,6 +379,14 @@ def mysql_fetch_all(sql, params=()):
     cur.close(); conn.close()
     return rows
 
+def mysql_fetch_one(sql, params=()):  # <-- (AÑADIDO) helper para 1 fila
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+    cur.execute(sql, params)
+    row = cur.fetchone()
+    cur.close(); conn.close()
+    return row
+
 def mysql_execute(sql, params=()):
     conn = get_db_connection()
     cur = conn.cursor()
@@ -457,6 +466,74 @@ def auth_logout():
 @login_required
 def panel():
     return render_template("panel.html", titulo="Panel")
+
+# ---------------------- CRUD MySQL: productos (AÑADIDO) ---------
+class ProductoMySQLForm(FlaskForm):  # formulario para MySQL
+    nombre = StringField("Nombre", validators=[DataRequired(), Length(min=2, max=100)])
+    precio = DecimalField("Precio", places=2, validators=[DataRequired(), NumberRange(min=0)])
+    stock  = IntegerField("Stock", validators=[DataRequired(), NumberRange(min=0)])
+    enviar = SubmitField("Guardar")
+
+@app.route("/mysql/productos")
+@login_required
+def mysql_productos_list():
+    filas = mysql_fetch_all(
+        "SELECT id_producto, nombre, precio, stock FROM productos ORDER BY id_producto"
+    )
+    return render_template("mysql_productos.html", productos=filas, titulo="Productos (MySQL)")
+
+@app.route("/mysql/productos/crear", methods=["GET", "POST"])
+@login_required
+def mysql_productos_crear():
+    form = ProductoMySQLForm()
+    if form.validate_on_submit():
+        try:
+            mysql_execute(
+                "INSERT INTO productos (nombre, precio, stock) VALUES (%s, %s, %s)",
+                (form.nombre.data.strip(), float(form.precio.data), int(form.stock.data))
+            )
+            flash("Producto creado en MySQL.", "success")
+            return redirect(url_for("mysql_productos_list"))
+        except Exception as e:
+            flash(f"Error al crear: {e}", "danger")
+    return render_template("mysql_producto_form.html", form=form, titulo="Crear (MySQL)")
+
+@app.route("/mysql/productos/editar/<int:id_producto>", methods=["GET", "POST"])
+@login_required
+def mysql_productos_editar(id_producto: int):
+    row = mysql_fetch_one(
+        "SELECT id_producto, nombre, precio, stock FROM productos WHERE id_producto=%s",
+        (id_producto,)
+    )
+    if not row:
+        flash("Producto no encontrado.", "warning")
+        return redirect(url_for("mysql_productos_list"))
+    form = ProductoMySQLForm()
+    if request.method == "GET":
+        form.nombre.data = row["nombre"]
+        form.precio.data = row["precio"]
+        form.stock.data  = row["stock"]
+    if form.validate_on_submit():
+        try:
+            mysql_execute(
+                "UPDATE productos SET nombre=%s, precio=%s, stock=%s WHERE id_producto=%s",
+                (form.nombre.data.strip(), float(form.precio.data), int(form.stock.data), id_producto)
+            )
+            flash("Producto actualizado.", "success")
+            return redirect(url_for("mysql_productos_list"))
+        except Exception as e:
+            flash(f"Error al actualizar: {e}", "danger")
+    return render_template("mysql_producto_form.html", form=form, titulo=f"Editar (ID {id_producto})")
+
+@app.route("/mysql/productos/eliminar/<int:id_producto>", methods=["POST"])
+@login_required
+def mysql_productos_eliminar(id_producto: int):
+    try:
+        mysql_execute("DELETE FROM productos WHERE id_producto=%s", (id_producto,))
+        flash("Producto eliminado.", "info")
+    except Exception as e:
+        flash(f"Error al eliminar: {e}", "danger")
+    return redirect(url_for("mysql_productos_list"))
 
 # ---------------------- Punto de entrada ------------------------
 if __name__ == "__main__":

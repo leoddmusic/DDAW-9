@@ -7,10 +7,11 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   </head>
   <body>
-    <nav class="topbar" style="display:flex;gap:12px;align-items:center">
+    <nav class="topbar" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
       <a href="{{ url_for('home') }}">Inicio</a>
       <a href="{{ url_for('nuevo') }}">Nuevo producto</a>
       <a href="{{ url_for('mysql_usuarios') }}">Usuarios (MySQL)</a>
+      <a href="{{ url_for('mysql_productos_list') }}">Productos (MySQL)</a>
 
       <span style="flex:1"></span>
 
