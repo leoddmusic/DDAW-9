@@ -422,6 +422,137 @@ def mysql_usuarios_eliminar(uid: int):
         flash(f"Error eliminando usuario: {e}", "danger")
     return redirect(url_for("mysql_usuarios"))
 
+# ---------------------- Productos (MySQL) paginado + CRUD -------
+class ProductoMySQLForm(FlaskForm):
+    nombre = StringField("Nombre", validators=[DataRequired(), Length(min=2, max=100)])
+    precio = DecimalField("Precio", places=2, validators=[DataRequired(), NumberRange(min=0)])
+    stock  = IntegerField("Stock", validators=[DataRequired(), NumberRange(min=0)])
+    enviar = SubmitField("Guardar")
+
+@app.route("/mysql/productos")
+@login_required
+def mysql_productos():
+    page, per_page = get_page_args(default_per_page=8)
+    total = mysql_scalar("SELECT COUNT(*) FROM productos")
+    offset = (page - 1) * per_page
+    # *** Cambio clave: mostrar los más nuevos primero (DESC) ***
+    productos = mysql_fetch_all(
+        "SELECT id_producto, nombre, precio, stock FROM productos ORDER BY id_producto DESC LIMIT %s OFFSET %s",
+        (per_page, offset)
+    )
+    ctx = paginate_context(total, page, per_page, "mysql_productos")
+    return render_template("mysql_productos.html", productos=productos, titulo="Productos (MySQL)", **ctx)
+
+@app.route("/mysql/productos/crear", methods=["GET","POST"])
+@login_required
+def mysql_productos_crear():
+    form = ProductoMySQLForm()
+    if form.validate_on_submit():
+        try:
+            mysql_execute(
+                "INSERT INTO productos (nombre, precio, stock) VALUES (%s, %s, %s)",
+                (form.nombre.data.strip(), float(form.precio.data), int(form.stock.data))
+            )
+            flash("Producto creado.", "success")
+            # Mostrará el nuevo en la parte superior (DESC)
+            return redirect(url_for("mysql_productos"))
+        except Exception as e:
+            flash(f"Error creando producto: {e}", "danger")
+    return render_template("mysql_producto_form.html", form=form, titulo="Nuevo producto (MySQL)")
+
+@app.route("/mysql/productos/editar/<int:pid>", methods=["GET","POST"])
+@login_required
+def mysql_productos_editar(pid: int):
+    row = mysql_fetch_all(
+        "SELECT id_producto, nombre, precio, stock FROM productos WHERE id_producto=%s", (pid,)
+    )
+    if not row:
+        flash("Producto no encontrado.", "warning")
+        return redirect(url_for("mysql_productos"))
+    form = ProductoMySQLForm()
+    if request.method == "GET":
+        form.nombre.data = row[0]["nombre"]
+        form.precio.data = row[0]["precio"]
+        form.stock.data  = row[0]["stock"]
+    if form.validate_on_submit():
+        try:
+            mysql_execute(
+                "UPDATE productos SET nombre=%s, precio=%s, stock=%s WHERE id_producto=%s",
+                (form.nombre.data.strip(), float(form.precio.data), int(form.stock.data), pid)
+            )
+            flash("Producto actualizado.", "success")
+            return redirect(url_for("mysql_productos"))
+        except Exception as e:
+            flash(f"Error actualizando producto: {e}", "danger")
+    return render_template("mysql_producto_form.html", form=form, titulo=f"Editar producto #{pid}")
+
+@app.route("/mysql/productos/eliminar/<int:pid>", methods=["POST"])
+@login_required
+def mysql_productos_eliminar(pid: int):
+    try:
+        mysql_execute("DELETE FROM productos WHERE id_producto=%s", (pid,))
+        flash("Producto eliminado.", "info")
+    except Exception as e:
+        flash(f"Error eliminando producto: {e}", "danger")
+    return redirect(url_for("mysql_productos"))
+
+# ---------------------- Categorías (MySQL) paginado + CRUD ------
+@app.route("/mysql/categorias")
+@login_required
+def mysql_categorias():
+    page, per_page = get_page_args(default_per_page=8)
+    total = mysql_scalar("SELECT COUNT(*) FROM categorias")
+    offset = (page - 1) * per_page
+    categorias = mysql_fetch_all(
+        "SELECT id_categoria, nombre FROM categorias ORDER BY id_categoria LIMIT %s OFFSET %s",
+        (per_page, offset)
+    )
+    ctx = paginate_context(total, page, per_page, "mysql_categorias")
+    return render_template("mysql_categorias.html", categorias=categorias, titulo="Categorías (MySQL)", **ctx)
+
+@app.route("/mysql/categorias/crear", methods=["GET","POST"])
+@login_required
+def mysql_categorias_crear():
+    form = CategoriaMySQLForm()
+    if form.validate_on_submit():
+        try:
+            mysql_execute("INSERT INTO categorias (nombre) VALUES (%s)", (form.nombre.data.strip(),))
+            flash("Categoría creada.", "success")
+            return redirect(url_for("mysql_categorias"))
+        except Exception as e:
+            flash(f"Error creando categoría: {e}", "danger")
+    return render_template("mysql_categoria_form.html", form=form, titulo="Nueva categoría")
+
+@app.route("/mysql/categorias/editar/<int:cid>", methods=["GET","POST"])
+@login_required
+def mysql_categorias_editar(cid: int):
+    row = mysql_fetch_all("SELECT id_categoria, nombre FROM categorias WHERE id_categoria=%s", (cid,))
+    if not row:
+        flash("Categoría no encontrada.", "warning")
+        return redirect(url_for("mysql_categorias"))
+    form = CategoriaMySQLForm()
+    if request.method == "GET":
+        form.nombre.data = row[0]["nombre"]
+    if form.validate_on_submit():
+        try:
+            mysql_execute("UPDATE categorias SET nombre=%s WHERE id_categoria=%s",
+                          (form.nombre.data.strip(), cid))
+            flash("Categoría actualizada.", "success")
+            return redirect(url_for("mysql_categorias"))
+        except Exception as e:
+            flash(f"Error actualizando categoría: {e}", "danger")
+    return render_template("mysql_categoria_form.html", form=form, titulo=f"Editar categoría #{cid}")
+
+@app.route("/mysql/categorias/eliminar/<int:cid>", methods=["POST"])
+@login_required
+def mysql_categorias_eliminar(cid: int):
+    try:
+        mysql_execute("DELETE FROM categorias WHERE id_categoria=%s", (cid,))
+        flash("Categoría eliminada.", "info")
+    except Exception as e:
+        flash(f"Error eliminando categoría: {e}", "danger")
+    return redirect(url_for("mysql_categorias"))
+
 # ---------------------- AUTH (Flask-Login + MySQL) --------------
 @app.route("/auth/register", methods=["GET", "POST"])
 def auth_register():
