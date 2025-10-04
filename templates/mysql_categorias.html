@@ -1,45 +1,40 @@
 {% extends "base.html" %}
+{% block title %}Categorías (MySQL){% endblock %}
+
 {% block content %}
-<div class="header-actions">
+<div class="toolbar">
   <h1>Categorías (MySQL)</h1>
-  <div>
-    <a class="btn" href="{{ url_for('mysql_categorias_crear') }}">Crear categoría</a>
-    <a class="btn outline" href="{{ url_for('mysql_productos') }}">Volver a Productos</a>
-  </div>
+  <a class="btn primary" href="{{ url_for('mysql_categorias_crear') }}">Crear categoría</a>
 </div>
 
+{% if categorias %}
 <table class="table">
   <thead>
-    <tr>
-      <th>ID</th>
-      <th>Nombre</th>
-      <th style="width:220px">Acciones</th>
-    </tr>
+    <tr><th>ID</th><th>Nombre</th><th>Acciones</th></tr>
   </thead>
   <tbody>
-    {% for c in categorias %}
-    <tr class="{{ 'alt' if loop.index is even }}">
+  {% for c in categorias %}
+    <tr>
       <td>{{ c.id_categoria }}</td>
       <td>{{ c.nombre }}</td>
       <td class="actions">
-        <a class="btn btn-small" href="{{ url_for('mysql_categorias_editar', cid=c.id_categoria) }}">Editar</a>
+        <a class="btn" href="{{ url_for('mysql_categorias_editar', cid=c.id_categoria) }}">Editar</a>
         <form action="{{ url_for('mysql_categorias_eliminar', cid=c.id_categoria) }}" method="post" style="display:inline">
-          <button class="btn btn-danger btn-small" onclick="return confirm('¿Eliminar categoría #{{ c.id_categoria }}?')">Eliminar</button>
+          {{ csrf_token() if csrf_token is defined }}
+          <button class="btn danger" type="submit" onclick="return confirm('¿Eliminar categoría #{{c.id_categoria}}?')">Eliminar</button>
         </form>
       </td>
     </tr>
-    {% else %}
-    <tr><td colspan="3" style="text-align:center">No hay categorías.</td></tr>
-    {% endfor %}
+  {% endfor %}
   </tbody>
 </table>
 
-<!-- Paginación -->
-{% if total_pages and total_pages > 1 %}
-<nav class="pagination">
-  {% if prev_url %}<a class="page" href="{{ prev_url }}">&laquo; Anterior</a>{% else %}<span class="page disabled">&laquo; Anterior</span>{% endif %}
-  <span class="page current">Página {{ page }} / {{ total_pages }}</span>
-  {% if next_url %}<a class="page" href="{{ next_url }}">Siguiente &raquo;</a>{% else %}<span class="page disabled">Siguiente &raquo;</span>{% endif %}
-</nav>
+<div class="pagination">
+  {% if prev_url %}<a class="btn" href="{{ prev_url }}">&laquo; Anterior</a>{% endif %}
+  <span>Página {{ page }} / {{ total_pages }}</span>
+  {% if next_url %}<a class="btn" href="{{ next_url }}">Siguiente &raquo;</a>{% endif %}
+</div>
+{% else %}
+  <p>No hay categorías.</p>
 {% endif %}
 {% endblock %}

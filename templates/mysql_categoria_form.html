@@ -11,21 +11,10 @@
     {{ form.nombre(class="input") }}
     {% for e in form.nombre.errors %}<small class="error">{{ e }}</small>{% endfor %}
   </div>
-  <div class="field">
-    <label>Precio</label>
-    {{ form.precio(class="input") }}
-    {% for e in form.precio.errors %}<small class="error">{{ e }}</small>{% endfor %}
-  </div>
-  <div class="field">
-    <label>Stock</label>
-    {{ form.stock(class="input") }}
-    {% for e in form.stock.errors %}<small class="error">{{ e }}</small>{% endfor %}
-  </div>
 
   <div class="actions">
     <button class="btn primary" type="submit">{{ form.enviar.label.text }}</button>
-    <!-- Volver SIEMPRE al listado correcto -->
-    <a class="btn secondary" href="{{ url_for('mysql_productos') }}">Cancelar</a>
+    <a class="btn secondary" href="{{ url_for('mysql_categorias') }}">Cancelar</a>
   </div>
 </form>
 {% endblock %}
