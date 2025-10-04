@@ -1,14 +1,15 @@
 # ==============================================================
-# app.py — Inventario Flask (CRUD + búsqueda) + Persistencia TXT/JSON/CSV
-#          + SQLAlchemy (usuarios.db) + MySQL (usuarios en XAMPP)
-#          + Autenticación con Flask-Login (MySQL)
-#          + CRUD MySQL de productos (añadido)
+# app.py — Inventario Flask (SQLite) + TXT/JSON/CSV
+#          + Autenticación Flask-Login (MySQL)
+#          + CRUD MySQL: Usuarios (paginado), Productos (paginado), Categorías (paginado)
+#          + SQLAlchemy demo (usuarios.db)
 # ==============================================================
 
 from flask import Flask, render_template, request, redirect, url_for, flash
 import sqlite3, json, csv
 from pathlib import Path
 from datetime import datetime
+from math import ceil
 
 # Conexión MySQL
 from Conexion import get_db_connection
@@ -19,7 +20,7 @@ from flask_login import (
 )
 from werkzeug.security import check_password_hash
 
-# Capa de usuarios MySQL
+# Capa de usuarios MySQL (para login)
 from models import User, get_user_by_id, get_user_by_email, create_user
 
 # Formularios
@@ -32,12 +33,11 @@ app.config["SECRET_KEY"] = "cambia_esta_clave_super_secreta"
 
 # ---------------------- LoginManager ---------------------------
 login_manager = LoginManager(app)
-login_manager.login_view = "auth_login"              # endpoint de la vista de login
+login_manager.login_view = "auth_login"
 login_manager.login_message_category = "warning"
 
 @login_manager.user_loader
 def load_user(user_id: str):
-    # Recibe id como string -> devuelve User o None
     return get_user_by_id(int(user_id))
 
 # ---------------------- SQLITE (productos) ----------------------
@@ -247,6 +247,11 @@ class LoginForm(FlaskForm):
     password = PasswordField("Contraseña", validators=[DataRequired(), Length(min=6, max=128)])
     enviar = SubmitField("Iniciar sesión")
 
+# Nueva: Categorías (MySQL)
+class CategoriaMySQLForm(FlaskForm):
+    nombre = StringField("Nombre", validators=[DataRequired(), Length(min=2, max=80)])
+    enviar = SubmitField("Guardar")
+
 # ---------------------- Rutas productos (SQLite) ----------------
 @app.route("/")
 @login_required
@@ -370,7 +375,7 @@ def test_db():
     cur.close(); conn.close()
     return f"OK MySQL → {tables}"
 
-# ---------------------- CRUD mínimo MySQL (tabla usuarios) ------
+# ---------------------- Helpers MySQL + Paginación --------------
 def mysql_fetch_all(sql, params=()):
     conn = get_db_connection()
     cur = conn.cursor(dictionary=True)
@@ -379,14 +384,6 @@ def mysql_fetch_all(sql, params=()):
     cur.close(); conn.close()
     return rows
 
-def mysql_fetch_one(sql, params=()):  # <-- (AÑADIDO) helper para 1 fila
-    conn = get_db_connection()
-    cur = conn.cursor(dictionary=True)
-    cur.execute(sql, params)
-    row = cur.fetchone()
-    cur.close(); conn.close()
-    return row
-
 def mysql_execute(sql, params=()):
     conn = get_db_connection()
     cur = conn.cursor()
@@ -394,23 +391,58 @@ def mysql_execute(sql, params=()):
     conn.commit()
     cur.close(); conn.close()
 
+def mysql_scalar(sql, params=()):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(sql, params)
+    val = cur.fetchone()[0]
+    cur.close(); conn.close()
+    return val
+
+def get_page_args(default_per_page=8):
+    try: page = int(request.args.get("page", 1))
+    except (TypeError, ValueError): page = 1
+    try: per_page = int(request.args.get("per_page", default_per_page))
+    except (TypeError, ValueError): per_page = default_per_page
+    page = max(1, page)
+    per_page = max(1, min(per_page, 50))
+    return page, per_page
+
+def paginate_context(total_rows, page, per_page, endpoint, **kwargs):
+    total_pages = max(1, ceil(total_rows / per_page)) if per_page else 1
+    prev_url = url_for(endpoint, page=page-1, per_page=per_page, **kwargs) if page > 1 else None
+    next_url = url_for(endpoint, page=page+1, per_page=per_page, **kwargs) if page < total_pages else None
+    return {
+        "page": page, "per_page": per_page, "total_rows": total_rows,
+        "total_pages": total_pages, "prev_url": prev_url, "next_url": next_url
+    }
+
+# ---------------------- Usuarios (MySQL) paginado ---------------
 @app.route("/mysql/usuarios", methods=["GET", "POST"])
 @login_required
 def mysql_usuarios():
     form = UsuarioMySQLForm()
+
     if form.validate_on_submit():
         try:
             mysql_execute(
                 "INSERT INTO usuarios (nombre, email, password_hash) VALUES (%s, %s, %s)",
-                (form.nombre.data.strip(), form.email.data.strip(), "PLACEHOLDER")  # panel admin básico
+                (form.nombre.data.strip(), form.email.data.strip(), "PLACEHOLDER")
             )
-            flash("Usuario creado en MySQL (sin contraseña real).", "success")
+            flash("Usuario creado en MySQL.", "success")
             return redirect(url_for("mysql_usuarios"))
         except Exception as e:
             flash(f"Error al crear usuario: {e}", "danger")
 
-    usuarios = mysql_fetch_all("SELECT id, nombre, email FROM usuarios ORDER BY id")
-    return render_template("mysql_usuarios.html", usuarios=usuarios, form=form, titulo="Usuarios (MySQL)")
+    page, per_page = get_page_args(default_per_page=8)
+    total = mysql_scalar("SELECT COUNT(*) FROM usuarios")
+    offset = (page - 1) * per_page
+    usuarios = mysql_fetch_all(
+        "SELECT id, nombre, email FROM usuarios ORDER BY id LIMIT %s OFFSET %s",
+        (per_page, offset)
+    )
+    ctx = paginate_context(total, page, per_page, "mysql_usuarios")
+    return render_template("mysql_usuarios.html", usuarios=usuarios, form=form, titulo="Usuarios (MySQL)", **ctx)
 
 @app.route("/mysql/usuarios/eliminar/<int:uid>", methods=["POST"])
 @login_required
@@ -435,7 +467,7 @@ def mysql_productos():
     page, per_page = get_page_args(default_per_page=8)
     total = mysql_scalar("SELECT COUNT(*) FROM productos")
     offset = (page - 1) * per_page
-    # *** Cambio clave: mostrar los más nuevos primero (DESC) ***
+    # Orden DESC para que lo recién creado se vea arriba
     productos = mysql_fetch_all(
         "SELECT id_producto, nombre, precio, stock FROM productos ORDER BY id_producto DESC LIMIT %s OFFSET %s",
         (per_page, offset)
@@ -454,26 +486,31 @@ def mysql_productos_crear():
                 (form.nombre.data.strip(), float(form.precio.data), int(form.stock.data))
             )
             flash("Producto creado.", "success")
-            # Mostrará el nuevo en la parte superior (DESC)
             return redirect(url_for("mysql_productos"))
         except Exception as e:
             flash(f"Error creando producto: {e}", "danger")
     return render_template("mysql_producto_form.html", form=form, titulo="Nuevo producto (MySQL)")
 
-@app.route("/mysql/productos/editar/<int:pid>", methods=["GET","POST"])
+# --- Productos (MySQL) EDITAR: aceptar pid O id_producto ---
+@app.route("/mysql/productos/editar/<int:pid>", methods=["GET", "POST"])
+@app.route("/mysql/productos/editar/<int:id_producto>", methods=["GET", "POST"])
 @login_required
-def mysql_productos_editar(pid: int):
+def mysql_productos_editar(pid=None, id_producto=None):
+    pid = pid or id_producto  # normalizamos el id
+
     row = mysql_fetch_all(
         "SELECT id_producto, nombre, precio, stock FROM productos WHERE id_producto=%s", (pid,)
     )
     if not row:
         flash("Producto no encontrado.", "warning")
         return redirect(url_for("mysql_productos"))
+
     form = ProductoMySQLForm()
     if request.method == "GET":
         form.nombre.data = row[0]["nombre"]
         form.precio.data = row[0]["precio"]
         form.stock.data  = row[0]["stock"]
+
     if form.validate_on_submit():
         try:
             mysql_execute(
@@ -484,16 +521,22 @@ def mysql_productos_editar(pid: int):
             return redirect(url_for("mysql_productos"))
         except Exception as e:
             flash(f"Error actualizando producto: {e}", "danger")
+
     return render_template("mysql_producto_form.html", form=form, titulo=f"Editar producto #{pid}")
 
+# --- Productos (MySQL) ELIMINAR: aceptar pid O id_producto ---
 @app.route("/mysql/productos/eliminar/<int:pid>", methods=["POST"])
+@app.route("/mysql/productos/eliminar/<int:id_producto>", methods=["POST"])
 @login_required
-def mysql_productos_eliminar(pid: int):
+def mysql_productos_eliminar(pid=None, id_producto=None):
+    pid = pid or id_producto  # normalizamos
+
     try:
         mysql_execute("DELETE FROM productos WHERE id_producto=%s", (pid,))
         flash("Producto eliminado.", "info")
     except Exception as e:
         flash(f"Error eliminando producto: {e}", "danger")
+
     return redirect(url_for("mysql_productos"))
 
 # ---------------------- Categorías (MySQL) paginado + CRUD ------
@@ -597,74 +640,6 @@ def auth_logout():
 @login_required
 def panel():
     return render_template("panel.html", titulo="Panel")
-
-# ---------------------- CRUD MySQL: productos (AÑADIDO) ---------
-class ProductoMySQLForm(FlaskForm):  # formulario para MySQL
-    nombre = StringField("Nombre", validators=[DataRequired(), Length(min=2, max=100)])
-    precio = DecimalField("Precio", places=2, validators=[DataRequired(), NumberRange(min=0)])
-    stock  = IntegerField("Stock", validators=[DataRequired(), NumberRange(min=0)])
-    enviar = SubmitField("Guardar")
-
-@app.route("/mysql/productos")
-@login_required
-def mysql_productos_list():
-    filas = mysql_fetch_all(
-        "SELECT id_producto, nombre, precio, stock FROM productos ORDER BY id_producto"
-    )
-    return render_template("mysql_productos.html", productos=filas, titulo="Productos (MySQL)")
-
-@app.route("/mysql/productos/crear", methods=["GET", "POST"])
-@login_required
-def mysql_productos_crear():
-    form = ProductoMySQLForm()
-    if form.validate_on_submit():
-        try:
-            mysql_execute(
-                "INSERT INTO productos (nombre, precio, stock) VALUES (%s, %s, %s)",
-                (form.nombre.data.strip(), float(form.precio.data), int(form.stock.data))
-            )
-            flash("Producto creado en MySQL.", "success")
-            return redirect(url_for("mysql_productos_list"))
-        except Exception as e:
-            flash(f"Error al crear: {e}", "danger")
-    return render_template("mysql_producto_form.html", form=form, titulo="Crear (MySQL)")
-
-@app.route("/mysql/productos/editar/<int:id_producto>", methods=["GET", "POST"])
-@login_required
-def mysql_productos_editar(id_producto: int):
-    row = mysql_fetch_one(
-        "SELECT id_producto, nombre, precio, stock FROM productos WHERE id_producto=%s",
-        (id_producto,)
-    )
-    if not row:
-        flash("Producto no encontrado.", "warning")
-        return redirect(url_for("mysql_productos_list"))
-    form = ProductoMySQLForm()
-    if request.method == "GET":
-        form.nombre.data = row["nombre"]
-        form.precio.data = row["precio"]
-        form.stock.data  = row["stock"]
-    if form.validate_on_submit():
-        try:
-            mysql_execute(
-                "UPDATE productos SET nombre=%s, precio=%s, stock=%s WHERE id_producto=%s",
-                (form.nombre.data.strip(), float(form.precio.data), int(form.stock.data), id_producto)
-            )
-            flash("Producto actualizado.", "success")
-            return redirect(url_for("mysql_productos_list"))
-        except Exception as e:
-            flash(f"Error al actualizar: {e}", "danger")
-    return render_template("mysql_producto_form.html", form=form, titulo=f"Editar (ID {id_producto})")
-
-@app.route("/mysql/productos/eliminar/<int:id_producto>", methods=["POST"])
-@login_required
-def mysql_productos_eliminar(id_producto: int):
-    try:
-        mysql_execute("DELETE FROM productos WHERE id_producto=%s", (id_producto,))
-        flash("Producto eliminado.", "info")
-    except Exception as e:
-        flash(f"Error al eliminar: {e}", "danger")
-    return redirect(url_for("mysql_productos_list"))
 
 # ---------------------- Punto de entrada ------------------------
 if __name__ == "__main__":

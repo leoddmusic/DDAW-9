@@ -7,27 +7,28 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   </head>
   <body>
-    <nav class="topbar" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-      <a href="{{ url_for('home') }}">Inicio</a>
-      <a href="{{ url_for('nuevo') }}">Nuevo producto</a>
-      <a href="{{ url_for('mysql_usuarios') }}">Usuarios (MySQL)</a>
-      <a href="{{ url_for('mysql_productos_list') }}">Productos (MySQL)</a>
+    <nav class="topbar" style="display:flex;gap:12px;align-items:center;padding:10px 14px;background:#0b7285;color:#fff">
+      <a href="{{ url_for('home') }}" style="color:#fff;text-decoration:none">Inicio</a>
+      <a href="{{ url_for('nuevo') }}" style="color:#fff;text-decoration:none">Nuevo producto</a>
+      <a href="{{ url_for('mysql_usuarios') }}" style="color:#fff;text-decoration:none">Usuarios (MySQL)</a>
+      <a href="{{ url_for('mysql_productos') }}" style="color:#fff;text-decoration:none">Productos (MySQL)</a>
+      <a href="{{ url_for('mysql_categorias') }}" style="color:#fff;text-decoration:none">Categorías (MySQL)</a>
 
       <span style="flex:1"></span>
 
       {% if current_user.is_authenticated %}
         <span>Hola, <strong>{{ current_user.nombre }}</strong></span>
-        <a href="{{ url_for('panel') }}">Panel</a>
-        <a href="{{ url_for('auth_logout') }}">Cerrar sesión</a>
+        <a href="{{ url_for('panel') }}" style="color:#fff;text-decoration:none">Panel</a>
+        <a href="{{ url_for('auth_logout') }}" style="color:#fff;text-decoration:none">Cerrar sesión</a>
       {% else %}
-        <a href="{{ url_for('auth_login') }}">Iniciar sesión</a>
-        <a href="{{ url_for('auth_register') }}">Crear cuenta</a>
+        <a href="{{ url_for('auth_login') }}" style="color:#fff;text-decoration:none">Iniciar sesión</a>
+        <a href="{{ url_for('auth_register') }}" style="color:#fff;text-decoration:none">Crear cuenta</a>
       {% endif %}
     </nav>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
-        <div class="flashes">
+        <div class="flashes" style="max-width:1040px;margin:16px auto;padding:0 16px;">
           {% for cat, msg in messages %}
             <div class="flash {{ cat }}">{{ msg }}</div>
           {% endfor %}

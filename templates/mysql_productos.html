@@ -1,38 +1,51 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>{{ titulo }}</h2>
-
-<div class="actions" style="margin: 12px 0;">
-  <a class="btn" href="{{ url_for('mysql_productos_crear') }}">Crear producto (MySQL)</a>
-  <a class="btn secondary" href="{{ url_for('home') }}">Volver al Inventario (SQLite)</a>
+<div class="header-actions">
+  <h1>Productos (MySQL)</h1>
+  <div>
+    <a class="btn" href="{{ url_for('mysql_productos_crear') }}">Crear producto (MySQL)</a>
+    <a class="btn outline" href="{{ url_for('home') }}">Volver al Inventario (SQLite)</a>
+  </div>
 </div>
 
 <table class="table">
   <thead>
     <tr>
-      <th>ID</th><th>Nombre</th><th>Precio</th><th>Stock</th><th style="width:160px;">Acciones</th>
+      <th>ID</th>
+      <th>Nombre</th>
+      <th>Precio</th>
+      <th>Stock</th>
+      <th>Acciones</th>
     </tr>
   </thead>
   <tbody>
-    {% if productos %}
-      {% for p in productos %}
-      <tr>
-        <td>{{ p.id_producto }}</td>
-        <td>{{ p.nombre }}</td>
-        <td>${{ '%.2f'|format(p.precio) }}</td>
-        <td>{{ p.stock }}</td>
-        <td>
-          <a class="btn" href="{{ url_for('mysql_productos_editar', id_producto=p.id_producto) }}">Editar</a>
-          <form method="POST" action="{{ url_for('mysql_productos_eliminar', id_producto=p.id_producto) }}"
-                style="display:inline" onsubmit="return confirm('¿Eliminar {{p.nombre}}?')">
-            <button class="btn danger">Eliminar</button>
-          </form>
-        </td>
-      </tr>
-      {% endfor %}
+    {% for p in productos %}
+    <tr class="{{ 'alt' if loop.index is even }}">
+      <td>{{ p.id_producto }}</td>
+      <td>{{ p.nombre }}</td>
+      <td>${{ '%.2f'|format(p.precio|float) }}</td>
+      <td>{{ p.stock }}</td>
+      <td class="actions">
+        <!-- 👇 OJO: usar pid= en lugar de id_producto= -->
+        <a class="btn btn-small" href="{{ url_for('mysql_productos_editar', pid=p.id_producto) }}">Editar</a>
+
+        <form action="{{ url_for('mysql_productos_eliminar', pid=p.id_producto) }}" method="post" style="display:inline">
+          <button class="btn btn-danger btn-small" onclick="return confirm('¿Eliminar producto #{{ p.id_producto }}?')">Eliminar</button>
+        </form>
+      </td>
+    </tr>
     {% else %}
-      <tr><td colspan="5" style="text-align:center;">Sin productos</td></tr>
-    {% endif %}
+    <tr><td colspan="5" style="text-align:center">No hay productos.</td></tr>
+    {% endfor %}
   </tbody>
 </table>
+
+<!-- Paginación -->
+{% if total_pages and total_pages > 1 %}
+<nav class="pagination">
+  {% if prev_url %}<a class="page" href="{{ prev_url }}">&laquo; Anterior</a>{% else %}<span class="page disabled">&laquo; Anterior</span>{% endif %}
+  <span class="page current">Página {{ page }} / {{ total_pages }}</span>
+  {% if next_url %}<a class="page" href="{{ next_url }}">Siguiente &raquo;</a>{% else %}<span class="page disabled">Siguiente &raquo;</span>{% endif %}
+</nav>
+{% endif %}
 {% endblock %}
